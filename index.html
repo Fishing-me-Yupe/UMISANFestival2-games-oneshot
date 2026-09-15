@@ -87,11 +87,15 @@
 
     const BASE_URL = 'https://fishing-me-yupe.github.io/oneshot-assets/';
 
-    // 画像の事前ロード処理
+    // 画像の事前ロード処理（計7種類）
     const imageSources = {
       kaki: BASE_URL + encodeURIComponent('柿.svg'),
       satsumaimo: BASE_URL + encodeURIComponent('さつまいも.svg'),
-      sanma: BASE_URL + encodeURIComponent('秋刀魚.svg')
+      sanma: BASE_URL + encodeURIComponent('秋刀魚.svg'),
+      budou: BASE_URL + encodeURIComponent('ブドウ.svg'),
+      nashi: BASE_URL + encodeURIComponent('梨.svg'),
+      kabocha: BASE_URL + encodeURIComponent('カボチャ.svg'),
+      kinoko: BASE_URL + encodeURIComponent('キノコ類.svg')
     };
 
     const images = {};
@@ -113,6 +117,9 @@
     let timerInterval = null;
     let isPlaying = false;
 
+    // マウス/タッチの目標位置
+    let targetMousePos = { x: canvas.width / 2, y: 100 };
+
     // 釣り針（プレイヤー）の位置
     const hook = {
       x: canvas.width / 2,
@@ -121,27 +128,33 @@
       caughtItem: null
     };
 
-    // 秋の味覚アイテムデータ（targetSizeで基準となる長辺のサイズを指定）
+    // 秋の味覚アイテムデータ
+    // weight: 重さ（重いほど引き上げ速度が低下し、振り回すと落ちやすい）
     const itemTypes = [
-      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2 },
-      { name: '柿', imgKey: 'kaki', score: 150, radius: 25, targetSize: 60, speed: 3 },
-      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 25, targetSize: 110, speed: 4.5 }
+      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2.0, weight: 1.2 },
+      { name: '柿', imgKey: 'kaki', score: 120, radius: 25, targetSize: 60, speed: 2.5, weight: 1.0 },
+      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 25, targetSize: 110, speed: 4.5, weight: 1.5 },
+      { name: 'ブドウ', imgKey: 'budou', score: 200, radius: 28, targetSize: 75, speed: 3.0, weight: 1.3 },
+      { name: '梨', imgKey: 'nashi', score: 150, radius: 26, targetSize: 65, speed: 2.8, weight: 1.1 },
+      { name: 'カボチャ', imgKey: 'kabocha', score: 250, radius: 32, targetSize: 85, speed: 1.8, weight: 2.0 },
+      { name: 'キノコ類', imgKey: 'kinoko', score: 80, radius: 22, targetSize: 55, speed: 3.5, weight: 0.8 }
     ];
 
     let items = [];
 
-    // マウス移動で釣り針を動かす
-    canvas.addEventListener('mousemove', (e) => {
+    // マウス・タッチ座標の更新
+    function updateTargetPos(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
-      hook.x = e.clientX - rect.left;
-      hook.y = e.clientY - rect.top;
+      targetMousePos.x = clientX - rect.left;
+      targetMousePos.y = clientY - rect.top;
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      updateTargetPos(e.clientX, e.clientY);
     });
 
-    // タッチ操作対応
     canvas.addEventListener('touchmove', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      hook.x = e.touches[0].clientX - rect.left;
-      hook.y = e.touches[0].clientY - rect.top;
+      updateTargetPos(e.touches[0].clientX, e.touches[0].clientY);
       e.preventDefault();
     }, { passive: false });
 
@@ -150,7 +163,7 @@
       const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
       const direction = Math.random() < 0.5 ? 1 : -1;
       const x = direction === 1 ? -60 : canvas.width + 60;
-      const y = Math.random() * (canvas.height - 220) + 160;
+      const y = Math.random() * (canvas.height - 230) + 170;
 
       items.push({
         ...type,
@@ -158,6 +171,7 @@
         y: y,
         vx: type.speed * direction,
         direction: direction,
+        isFalling: false, // 落ちている最中かどうか
         id: Math.random()
       });
     }
@@ -173,19 +187,21 @@
       timeLeft = 30;
       items = [];
       hook.caughtItem = null;
+      hook.x = canvas.width / 2;
+      hook.y = 100;
+      targetMousePos.x = canvas.width / 2;
+      targetMousePos.y = 100;
       isPlaying = true;
       
       scoreEl.textContent = score;
       timeEl.textContent = timeLeft;
       startBtn.disabled = true;
 
-      // 定期的にアイテムを生成
       if (gameInterval) clearInterval(gameInterval);
       gameInterval = setInterval(() => {
-        if (items.length < 7) createItem();
-      }, 1000);
+        if (items.length < 8) createItem();
+      }, 900);
 
-      // カウントダウンタイマー
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(() => {
         timeLeft--;
@@ -211,6 +227,31 @@
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // --- 釣り針の移動制御（対策1: 重さと追従スピード制限） ---
+      const dxMouse = targetMousePos.x - hook.x;
+      const dyMouse = targetMousePos.y - hook.y;
+      const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+
+      // 追従速度の係数（獲物を引っかけている時は重さに応じて遅くなる）
+      let followSpeed = 0.25;
+      if (hook.caughtItem) {
+        followSpeed = 0.15 / hook.caughtItem.weight;
+      }
+
+      hook.x += dxMouse * followSpeed;
+      hook.y += dyMouse * followSpeed;
+
+      // --- 対策2: 激しい操作による落下判定 ---
+      if (hook.caughtItem) {
+        // マウスと針の離れ具合（引っ張る力）で判定
+        if (distMouse > 160) {
+          // 振り回しすぎると外れて落下する
+          hook.caughtItem.isFalling = true;
+          hook.caughtItem.vy = 2; // 落下速度初期値
+          hook.caughtItem = null;
+        }
+      }
+
       // 1. 竿と糸の描画
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2, 0);
@@ -233,18 +274,16 @@
         let item = items[i];
         const img = images[item.imgKey];
 
-        // 本来の画像の縦横比を維持してサイズ計算
+        // 画像アスペクト比の維持
         let drawWidth = item.targetSize;
         let drawHeight = item.targetSize;
 
         if (img && img.naturalWidth && img.naturalHeight) {
           const aspectRatio = img.naturalWidth / img.naturalHeight;
           if (aspectRatio >= 1) {
-            // 横長画像の場合
             drawWidth = item.targetSize;
             drawHeight = item.targetSize / aspectRatio;
           } else {
-            // 縦長画像の場合
             drawHeight = item.targetSize;
             drawWidth = item.targetSize * aspectRatio;
           }
@@ -263,6 +302,16 @@
             hook.caughtItem = null;
             continue;
           }
+        } else if (item.isFalling) {
+          // 落下中
+          item.vy += 0.4; // 重力加速度
+          item.y += item.vy;
+
+          // 画面下に落ち切ったら消去
+          if (item.y > canvas.height + 100) {
+            items.splice(i, 1);
+            continue;
+          }
         } else {
           // 通常移動
           item.x += item.vx;
@@ -273,7 +322,7 @@
             continue;
           }
 
-          // 当たり判定（針とアイテムの距離計算）
+          // 当たり判定
           if (!hook.caughtItem && isPlaying) {
             const dx = hook.x - item.x;
             const dy = hook.y - item.y;
@@ -290,7 +339,6 @@
           ctx.save();
           ctx.translate(item.x, item.y);
           
-          // 右に進む場合は画像を反転
           if (item.direction === 1) {
             ctx.scale(-1, 1);
           }
