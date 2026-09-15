@@ -121,11 +121,11 @@
       caughtItem: null
     };
 
-    // 秋の味覚アイテムデータ（画像キー・スコア・当たり判定半径・描画サイズ・速度を設定）
+    // 秋の味覚アイテムデータ（targetSizeで基準となる長辺のサイズを指定）
     const itemTypes = [
-      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 25, width: 60, height: 60, speed: 2 },
-      { name: '柿', imgKey: 'kaki', score: 150, radius: 22, width: 50, height: 50, speed: 3 },
-      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 20, width: 70, height: 40, speed: 4.5 }
+      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2 },
+      { name: '柿', imgKey: 'kaki', score: 150, radius: 25, targetSize: 60, speed: 3 },
+      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 25, targetSize: 110, speed: 4.5 }
     ];
 
     let items = [];
@@ -149,8 +149,8 @@
     function createItem() {
       const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
       const direction = Math.random() < 0.5 ? 1 : -1;
-      const x = direction === 1 ? -50 : canvas.width + 50;
-      const y = Math.random() * (canvas.height - 200) + 150; // 下半分に配置
+      const x = direction === 1 ? -60 : canvas.width + 60;
+      const y = Math.random() * (canvas.height - 220) + 160;
 
       items.push({
         ...type,
@@ -213,7 +213,7 @@
 
       // 1. 竿と糸の描画
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, 0); // 画面中央上部から糸を伸ばす
+      ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(hook.x, hook.y);
       ctx.strokeStyle = '#555';
       ctx.lineWidth = 2;
@@ -231,11 +231,29 @@
       // 3. アイテムの更新と描画
       for (let i = items.length - 1; i >= 0; i--) {
         let item = items[i];
+        const img = images[item.imgKey];
+
+        // 本来の画像の縦横比を維持してサイズ計算
+        let drawWidth = item.targetSize;
+        let drawHeight = item.targetSize;
+
+        if (img && img.naturalWidth && img.naturalHeight) {
+          const aspectRatio = img.naturalWidth / img.naturalHeight;
+          if (aspectRatio >= 1) {
+            // 横長画像の場合
+            drawWidth = item.targetSize;
+            drawHeight = item.targetSize / aspectRatio;
+          } else {
+            // 縦長画像の場合
+            drawHeight = item.targetSize;
+            drawWidth = item.targetSize * aspectRatio;
+          }
+        }
 
         if (item === hook.caughtItem) {
           // 釣り上げ中：針の位置に追従
           item.x = hook.x;
-          item.y = hook.y + item.height / 2;
+          item.y = hook.y + drawHeight / 2;
 
           // 画面上部（ゴール）まで引き上げたらスコア獲得
           if (hook.y < 50) {
@@ -250,7 +268,7 @@
           item.x += item.vx;
 
           // 画面外に出たら削除
-          if (item.x < -80 || item.x > canvas.width + 80) {
+          if (item.x < -100 || item.x > canvas.width + 100) {
             items.splice(i, 1);
             continue;
           }
@@ -262,23 +280,22 @@
             const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance < hook.size + item.radius) {
-              hook.caughtItem = item; // 引っかける
+              hook.caughtItem = item;
             }
           }
         }
 
         // --- SVGイラストの描画 ---
-        const img = images[item.imgKey];
         if (img && img.complete) {
           ctx.save();
           ctx.translate(item.x, item.y);
           
-          // 右に進む場合は画像を反転（秋刀魚などの向き調整用）
+          // 右に進む場合は画像を反転
           if (item.direction === 1) {
             ctx.scale(-1, 1);
           }
           
-          ctx.drawImage(img, -item.width / 2, -item.height / 2, item.width, item.height);
+          ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
           ctx.restore();
         }
       }
