@@ -87,15 +87,15 @@
 
     const BASE_URL = 'https://fishing-me-yupe.github.io/oneshot-assets/';
 
-    // 画像の事前ロード処理（計7種類）
+    // 新しいアルファベットファイル名で画像ソースを指定
     const imageSources = {
-      kaki: BASE_URL + encodeURIComponent('柿.svg'),
-      satsumaimo: BASE_URL + encodeURIComponent('さつまいも.svg'),
-      sanma: BASE_URL + encodeURIComponent('秋刀魚.svg'),
-      budou: BASE_URL + encodeURIComponent('ブドウ.svg'),
-      nashi: BASE_URL + encodeURIComponent('梨.svg'),
-      kabocha: BASE_URL + encodeURIComponent('カボチャ.svg'),
-      kinoko: BASE_URL + encodeURIComponent('キノコ類.svg')
+      kaki: BASE_URL + 'persimmon.svg',
+      satsumaimo: BASE_URL + 'sweetpotato.svg',
+      sanma: BASE_URL + 'pacific-saury.svg',
+      budou: BASE_URL + 'grapes.svg',
+      nashi: BASE_URL + 'pears.svg',
+      kabocha: BASE_URL + 'pumpkin.svg',
+      kinoko: BASE_URL + 'mushrooms.svg'
     };
 
     const images = {};
@@ -129,7 +129,6 @@
     };
 
     // 秋の味覚アイテムデータ
-    // weight: 重さ（重いほど引き上げ速度が低下し、振り回すと落ちやすい）
     const itemTypes = [
       { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2.0, weight: 1.2 },
       { name: '柿', imgKey: 'kaki', score: 120, radius: 25, targetSize: 60, speed: 2.5, weight: 1.0 },
@@ -171,7 +170,7 @@
         y: y,
         vx: type.speed * direction,
         direction: direction,
-        isFalling: false, // 落ちている最中かどうか
+        isFalling: false,
         id: Math.random()
       });
     }
@@ -227,12 +226,11 @@
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // --- 釣り針の移動制御（対策1: 重さと追従スピード制限） ---
+      // --- 釣り針の移動制御（重さと追従スピード制限） ---
       const dxMouse = targetMousePos.x - hook.x;
       const dyMouse = targetMousePos.y - hook.y;
       const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
-      // 追従速度の係数（獲物を引っかけている時は重さに応じて遅くなる）
       let followSpeed = 0.25;
       if (hook.caughtItem) {
         followSpeed = 0.15 / hook.caughtItem.weight;
@@ -241,13 +239,11 @@
       hook.x += dxMouse * followSpeed;
       hook.y += dyMouse * followSpeed;
 
-      // --- 対策2: 激しい操作による落下判定 ---
+      // --- 激しい操作による落下判定 ---
       if (hook.caughtItem) {
-        // マウスと針の離れ具合（引っ張る力）で判定
         if (distMouse > 160) {
-          // 振り回しすぎると外れて落下する
           hook.caughtItem.isFalling = true;
-          hook.caughtItem.vy = 2; // 落下速度初期値
+          hook.caughtItem.vy = 2;
           hook.caughtItem = null;
         }
       }
@@ -274,7 +270,6 @@
         let item = items[i];
         const img = images[item.imgKey];
 
-        // 画像アスペクト比の維持
         let drawWidth = item.targetSize;
         let drawHeight = item.targetSize;
 
@@ -290,11 +285,9 @@
         }
 
         if (item === hook.caughtItem) {
-          // 釣り上げ中：針の位置に追従
           item.x = hook.x;
           item.y = hook.y + drawHeight / 2;
 
-          // 画面上部（ゴール）まで引き上げたらスコア獲得
           if (hook.y < 50) {
             score += item.score;
             scoreEl.textContent = score;
@@ -303,26 +296,21 @@
             continue;
           }
         } else if (item.isFalling) {
-          // 落下中
-          item.vy += 0.4; // 重力加速度
+          item.vy += 0.4;
           item.y += item.vy;
 
-          // 画面下に落ち切ったら消去
           if (item.y > canvas.height + 100) {
             items.splice(i, 1);
             continue;
           }
         } else {
-          // 通常移動
           item.x += item.vx;
 
-          // 画面外に出たら削除
           if (item.x < -100 || item.x > canvas.width + 100) {
             items.splice(i, 1);
             continue;
           }
 
-          // 当たり判定
           if (!hook.caughtItem && isPlaying) {
             const dx = hook.x - item.x;
             const dy = hook.y - item.y;
