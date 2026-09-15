@@ -80,6 +80,24 @@
     const timeEl = document.getElementById('time');
     const startBtn = document.getElementById('start-btn');
 
+    // SVG画像の読み込み設定
+    const images = {};
+    const imageSources = {
+      kaki: '柿.svg',
+      satsumaimo: 'さつまいも.svg'
+    };
+
+    let loadedImagesCount = 0;
+    const totalImages = Object.keys(imageSources).length;
+
+    for (let key in imageSources) {
+      images[key] = new Image();
+      images[key].src = imageSources[key];
+      images[key].onload = () => {
+        loadedImagesCount++;
+      };
+    }
+
     // ゲーム変数
     let score = 0;
     let timeLeft = 30;
@@ -95,17 +113,15 @@
       caughtItem: null
     };
 
-    // 秋の味覚アイテムデータ
+    // 出現させるアイテム（柿・さつまいもの2種類に絞り込み）
     const itemTypes = [
-      { name: '焼き芋', score: 100, color: '#8b0000', radius: 25, speed: 2 },
-      { name: 'まつたけ', score: 300, color: '#d2b48c', radius: 18, speed: 4 },
-      { name: 'くり', score: 50, color: '#a0522d', radius: 20, speed: 1.5 },
-      { name: 'かき', score: 150, color: '#ff7f50', radius: 22, speed: 3 }
+      { typeKey: 'satsumaimo', name: 'さつまいも', score: 100, radius: 30, speed: 2, displayWidth: 60, displayHeight: 60 },
+      { typeKey: 'kaki', name: '柿', score: 150, radius: 25, speed: 3.5, displayWidth: 50, displayHeight: 50 }
     ];
 
     let items = [];
 
-    // マウス移動で釣り針を動かす
+    // マウス操作
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
       hook.x = e.clientX - rect.left;
@@ -120,12 +136,12 @@
       e.preventDefault();
     }, { passive: false });
 
-    // アイテムのランダム生成
+    // アイテム生成
     function createItem() {
       const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
       const direction = Math.random() < 0.5 ? 1 : -1;
-      const x = direction === 1 ? -30 : canvas.width + 30;
-      const y = Math.random() * (canvas.height - 200) + 150; // 下半分に配置
+      const x = direction === 1 ? -40 : canvas.width + 40;
+      const y = Math.random() * (canvas.height - 200) + 150;
 
       items.push({
         ...type,
@@ -148,13 +164,11 @@
       timeEl.textContent = timeLeft;
       startBtn.disabled = true;
 
-      // 定期的にアイテムを生成
       if (gameInterval) clearInterval(gameInterval);
       gameInterval = setInterval(() => {
-        if (items.length < 7) createItem();
-      }, 1000);
+        if (items.length < 6) createItem();
+      }, 900);
 
-      // カウントダウンタイマー
       if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(() => {
         timeLeft--;
@@ -182,7 +196,7 @@
 
       // 1. 竿と糸の描画
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, 0); // 画面中央上部から糸を伸ばす
+      ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(hook.x, hook.y);
       ctx.strokeStyle = '#555';
       ctx.lineWidth = 2;
@@ -202,11 +216,10 @@
         let item = items[i];
 
         if (item === hook.caughtItem) {
-          // 釣り上げ中：針の位置に追従
+          // 釣り上げ中
           item.x = hook.x;
-          item.y = hook.y + 25;
+          item.y = hook.y + 30;
 
-          // 画面上部（ゴール）まで引き上げたらスコア獲得
           if (hook.y < 50) {
             score += item.score;
             scoreEl.textContent = score;
@@ -218,39 +231,40 @@
           // 通常移動
           item.x += item.vx;
 
-          // 画面外に出たら削除
-          if (item.x < -50 || item.x > canvas.width + 50) {
+          if (item.x < -60 || item.x > canvas.width + 60) {
             items.splice(i, 1);
             continue;
           }
 
-          // 当たり判定（針とアイテムの距離計算）
+          // 当たり判定
           if (!hook.caughtItem && isPlaying) {
             const dx = hook.x - item.x;
             const dy = hook.y - item.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance < hook.size + item.radius) {
-              hook.caughtItem = item; // 引っかける
+              hook.caughtItem = item;
             }
           }
         }
 
-        // --- 味覚イラストの描画（現在は簡易図形＋文字） ---
-        ctx.beginPath();
-        ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
-        ctx.fillStyle = item.color;
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
-
-        // テキスト表示
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(item.name, item.x, item.y);
+        // SVG画像の描画
+        const img = images[item.typeKey];
+        if (img && img.complete && img.naturalWidth !== 0) {
+          ctx.drawImage(
+            img, 
+            item.x - item.displayWidth / 2, 
+            item.y - item.displayHeight / 2, 
+            item.displayWidth, 
+            item.displayHeight
+          );
+        } else {
+          // フォールバック（万が一画像読み込み前の表示）
+          ctx.beginPath();
+          ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+          ctx.fillStyle = item.typeKey === 'satsumaimo' ? '#8b0000' : '#ff7f50';
+          ctx.fill();
+        }
       }
 
       if (isPlaying) {
