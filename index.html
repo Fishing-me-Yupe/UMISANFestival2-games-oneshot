@@ -101,7 +101,7 @@
       rice: BASE_URL + 'rice.svg',
       salmon: BASE_URL + 'salmon.svg',
       lotus: BASE_URL + 'lotus-roots.svg',
-      arm: BASE_URL + 'arm.svg' // 釣り針テクスチャ
+      arm: BASE_URL + 'arm.svg'
     };
 
     const images = {};
@@ -189,11 +189,11 @@
       let speedMultiplier = 1.0;
       let spawnDelay = 1200;
 
-      if (timeLeft <= 10) { // ラスト10秒：大ラッシュ
+      if (timeLeft <= 10) {
         maxItems = 7;
         speedMultiplier = 1.4;
         spawnDelay = 600;
-      } else if (timeLeft <= 20) { // 中盤10秒
+      } else if (timeLeft <= 20) {
         maxItems = 6;
         speedMultiplier = 1.2;
         spawnDelay = 900;
@@ -284,7 +284,7 @@
       hook.x += dxMouse * followSpeed;
       hook.y += dyMouse * followSpeed;
 
-      // --- 減点判定: マウスを暴れさせすぎたら減点 ---
+      // --- 減点判定 ---
       if (isPlaying && mouseSpeed > 140) {
         score = Math.max(0, score - 30);
         scoreEl.textContent = score;
@@ -292,7 +292,7 @@
         mouseSpeed = 0;
       }
 
-      // --- 落下判定: 強引に引っ張りすぎたら落下 ---
+      // --- 落下判定 ---
       if (hook.caughtItem) {
         if (distMouse > 250) {
           hook.caughtItem.isFalling = true;
@@ -326,7 +326,8 @@
 
         ctx.save();
         ctx.translate(hook.x, hook.y);
-        ctx.drawImage(armImg, -drawW / 2, -drawH / 2, drawW, drawH);
+        // 画像の右端が hook.x（糸の末端）と一致するようにオフセット設定 (-drawW)
+        ctx.drawImage(armImg, -drawW, -drawH / 2, drawW, drawH);
         ctx.restore();
       } else {
         // 画像読み込み前のフォールバック描画
@@ -356,7 +357,7 @@
         }
 
         if (item === hook.caughtItem) {
-          item.x = hook.x;
+          item.x = hook.x - drawWidth / 4; // 針先端寄りに引っかかるよう調整
           item.y = hook.y + drawHeight / 2;
 
           if (hook.y < 50) {
