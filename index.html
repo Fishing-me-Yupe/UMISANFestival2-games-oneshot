@@ -301,9 +301,13 @@
         }
       }
 
+      // 竿の固定起点 (canvas.width / 2, 0)
+      const topX = canvas.width / 2;
+      const topY = 0;
+
       // 1. 竿と糸の描画
       ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, 0);
+      ctx.moveTo(topX, topY);
       ctx.lineTo(hook.x, hook.y);
       ctx.strokeStyle = '#555';
       ctx.lineWidth = 2;
@@ -324,10 +328,16 @@
           }
         }
 
+        // 糸の角度（ラジアン）を計算
+        const angle = Math.atan2(hook.y - topY, hook.x - topX);
+
         ctx.save();
+        // 糸の先端座標にコンテキストを移動して回転
         ctx.translate(hook.x, hook.y);
-        // 画像の右端が hook.x（糸の末端）と一致するようにオフセット設定 (-drawW)
-        ctx.drawImage(armImg, -drawW, -drawH / 2, drawW, drawH);
+        ctx.rotate(angle);
+
+        // 糸の角度に対して右端(-drawW)かつ垂直方向に-4pxオフセット
+        ctx.drawImage(armImg, -drawW, -drawH / 2 - 4, drawW, drawH);
         ctx.restore();
       } else {
         // 画像読み込み前のフォールバック描画
@@ -357,7 +367,7 @@
         }
 
         if (item === hook.caughtItem) {
-          item.x = hook.x - drawWidth / 4; // 針先端寄りに引っかかるよう調整
+          item.x = hook.x - drawWidth / 4;
           item.y = hook.y + drawHeight / 2;
 
           if (hook.y < 50) {
