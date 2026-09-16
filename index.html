@@ -301,13 +301,9 @@
         }
       }
 
-      // 竿の固定起点 (canvas.width / 2, 0)
-      const topX = canvas.width / 2;
-      const topY = 0;
-
       // 1. 竿と糸の描画
       ctx.beginPath();
-      ctx.moveTo(topX, topY);
+      ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(hook.x, hook.y);
       ctx.strokeStyle = '#555';
       ctx.lineWidth = 2;
@@ -328,16 +324,10 @@
           }
         }
 
-        // 糸の角度（ラジアン）を計算
-        const angle = Math.atan2(hook.y - topY, hook.x - topX);
-
         ctx.save();
-        // 糸の先端座標にコンテキストを移動して回転
         ctx.translate(hook.x, hook.y);
-        ctx.rotate(angle);
-
-        // 糸の角度に対して右端(-drawW)かつ垂直方向に-4pxオフセット
-        ctx.drawImage(armImg, -drawW, -drawH / 2 - 4, drawW, drawH);
+        // 右端（X: -drawW）を糸の位置に配置し、Y方向を-4px上にオフセット
+        ctx.drawImage(armImg, -drawW, -4, drawW, drawH);
         ctx.restore();
       } else {
         // 画像読み込み前のフォールバック描画
