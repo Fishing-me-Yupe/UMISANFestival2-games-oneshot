@@ -12,15 +12,20 @@
       font-family: 'Helvetica Neue', Arial, sans-serif;
       text-align: center;
       user-select: none;
+      overflow-x: hidden;
     }
     h1 {
       margin: 15px 0 5px;
       color: #8b4513;
+      font-size: clamp(20px, 5vw, 32px);
     }
     #game-container {
       position: relative;
-      width: 800px;
+      width: 100%;
+      max-width: 800px;
       margin: 0 auto;
+      display: flex;
+      justify-content: center;
     }
     canvas {
       background-color: #fff8dc;
@@ -28,13 +33,17 @@
       border-radius: 12px;
       box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
       cursor: crosshair;
+      max-width: 100%;
+      height: auto;
+      touch-action: none;
     }
     .ui-panel {
       display: flex;
       justify-content: space-between;
-      width: 800px;
+      width: 90%;
+      max-width: 800px;
       margin: 10px auto;
-      font-size: 20px;
+      font-size: clamp(16px, 4vw, 20px);
       font-weight: bold;
       color: #5c2c0c;
     }
@@ -74,7 +83,7 @@
     <canvas id="gameCanvas" width="800" height="500"></canvas>
   </div>
 
-  <div style="margin-top: 15px;">
+  <div style="margin-top: 15px; margin-bottom: 20px;">
     <button id="start-btn">ゲームスタート！</button>
   </div>
 
@@ -108,7 +117,6 @@
     let loadedImageCount = 0;
     const totalImages = Object.keys(imageSources).length;
 
-    // 色別の着色済みオフスクリーンキャンバスを保持
     const coloredLeafCanvases = {
       red: null,
       yellow: null,
@@ -126,7 +134,6 @@
       };
     }
 
-    // leaf.svgから赤・黄・オレンジのキャンバス画像を生成
     function createColoredLeaves(leafImg) {
       const colors = {
         red: '#e74c3c',
@@ -152,7 +159,6 @@
       }
     }
 
-    // ゲーム変数
     let score = 0;
     let timeLeft = 30;
     let gameTimeout = null;
@@ -160,19 +166,16 @@
     let timerInterval = null;
     let isPlaying = false;
 
-    // FPS制御用変数 (30 FPS)
-    const FPS = 30;
-    const frameInterval = 1000 / FPS; // 約33.33ms
+    const FPS = 45;
+    const frameInterval = 1000 / FPS;
     let lastFrameTime = 0;
 
-    // マウス位置と速度計測用
     let targetMousePos = { x: canvas.width / 2, y: 100 };
     let prevMousePos = { x: canvas.width / 2, y: 100 };
     let mouseSpeed = 0;
     let penaltyMessageTimer = 0;
     let ignorePenaltyFrames = 0;
 
-    // 釣り針設定
     const hook = {
       x: canvas.width / 2,
       y: 100,
@@ -181,7 +184,6 @@
       caughtItem: null
     };
 
-    // 秋の味覚アイテムデータ
     const itemTypes = [
       { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2.5, weight: 0.9 },
       { name: '柿', imgKey: 'kaki', score: 120, radius: 25, targetSize: 60, speed: 3.0, weight: 0.8 },
@@ -202,8 +204,11 @@
 
     function updateTargetPos(clientX, clientY) {
       const rect = canvas.getBoundingClientRect();
-      const currentX = clientX - rect.left;
-      const currentY = clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const currentX = (clientX - rect.left) * scaleX;
+      const currentY = (clientY - rect.top) * scaleY;
 
       const dx = currentX - prevMousePos.x;
       const dy = currentY - prevMousePos.y;
@@ -218,6 +223,10 @@
     canvas.addEventListener('mousemove', (e) => {
       updateTargetPos(e.clientX, e.clientY);
     });
+
+    canvas.addEventListener('touchstart', (e) => {
+      updateTargetPos(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
       updateTargetPos(e.touches[0].clientX, e.touches[0].clientY);
@@ -306,7 +315,7 @@
       prevMousePos.x = canvas.width / 2;
       prevMousePos.y = 100;
       penaltyMessageTimer = 0;
-      ignorePenaltyFrames = 45; // 30fpsに合わせて約1.5秒分(45フレーム)
+      ignorePenaltyFrames = 68;
       isPlaying = true;
       lastFrameTime = performance.now();
       
@@ -341,14 +350,12 @@
       alert(`タイムアップ！ あなたのスコアは ${score} pt でした！`);
     }
 
-    // 固定30 FPSのゲームループ制御
     function gameLoop(timestamp) {
       if (!isPlaying) return;
 
       const elapsed = timestamp - lastFrameTime;
 
       if (elapsed >= frameInterval) {
-        // 経過時間から余剰分を引いて補正
         lastFrameTime = timestamp - (elapsed % frameInterval);
         update();
       }
@@ -359,7 +366,6 @@
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // --- 釣り針移動 ---
       const dxMouse = targetMousePos.x - hook.x;
       const dyMouse = targetMousePos.y - hook.y;
       const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
@@ -372,14 +378,13 @@
       hook.x += dxMouse * followSpeed;
       hook.y += dyMouse * followSpeed;
 
-      // --- 減点判定 ---
       if (ignorePenaltyFrames > 0) {
         ignorePenaltyFrames--;
         mouseSpeed = 0;
       } else if (isPlaying && mouseSpeed > 180) {
         score = Math.max(0, score - 30);
         scoreEl.textContent = score;
-        penaltyMessageTimer = 15; // 30fpsに合わせて調整
+        penaltyMessageTimer = 22;
         mouseSpeed = 0;
       }
 
@@ -387,7 +392,6 @@
         dropCaughtItem();
       }
 
-      // 1. 竿と糸
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(hook.x, hook.y);
@@ -395,7 +399,6 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 2. 釣り針
       const armImg = images.arm;
       if (armImg && armImg.complete) {
         let drawW = hook.targetSize;
@@ -416,7 +419,6 @@
         ctx.restore();
       }
 
-      // 3. 落ち葉
       for (let i = fallingLeaves.length - 1; i >= 0; i--) {
         let leaf = fallingLeaves[i];
 
@@ -442,7 +444,6 @@
           ctx.restore();
         }
 
-        // 衝突判定
         if (isPlaying) {
           let checkX = hook.x;
           let checkY = hook.y;
@@ -466,7 +467,6 @@
         }
       }
 
-      // 4. 秋の味覚アイテム
       for (let i = items.length - 1; i >= 0; i--) {
         let item = items[i];
         const img = images[item.imgKey];
@@ -534,7 +534,6 @@
         }
       }
 
-      // 警告テキスト
       if (penaltyMessageTimer > 0) {
         penaltyMessageTimer--;
         ctx.fillStyle = '#e74c3c';
