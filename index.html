@@ -143,10 +143,7 @@
         offCanvas.height = h;
         const offCtx = offCanvas.getContext('2d');
 
-        // 元画像を描画
         offCtx.drawImage(leafImg, 0, 0, w, h);
-        
-        // 色を合成
         offCtx.globalCompositeOperation = 'source-in';
         offCtx.fillStyle = colors[colorKey];
         offCtx.fillRect(0, 0, w, h);
@@ -162,6 +159,11 @@
     let leafSpawnTimeout = null;
     let timerInterval = null;
     let isPlaying = false;
+
+    // FPS制御用変数 (30 FPS)
+    const FPS = 30;
+    const frameInterval = 1000 / FPS; // 約33.33ms
+    let lastFrameTime = 0;
 
     // マウス位置と速度計測用
     let targetMousePos = { x: canvas.width / 2, y: 100 };
@@ -262,7 +264,6 @@
     function scheduleLeafSpawn() {
       if (!isPlaying) return;
 
-      // カラーバリエーション確率: 赤 5/12, 黄 4/12, オレンジ 3/12
       const rand = Math.random();
       let colorType = 'red';
       if (rand < 4 / 12) {
@@ -305,8 +306,9 @@
       prevMousePos.x = canvas.width / 2;
       prevMousePos.y = 100;
       penaltyMessageTimer = 0;
-      ignorePenaltyFrames = 90;
+      ignorePenaltyFrames = 45; // 30fpsに合わせて約1.5秒分(45フレーム)
       isPlaying = true;
+      lastFrameTime = performance.now();
       
       scoreEl.textContent = score;
       timeEl.textContent = timeLeft;
@@ -327,7 +329,7 @@
         }
       }, 1000);
 
-      requestAnimationFrame(update);
+      requestAnimationFrame(gameLoop);
     }
 
     function endGame() {
@@ -337,6 +339,21 @@
       clearInterval(timerInterval);
       startBtn.disabled = false;
       alert(`タイムアップ！ あなたのスコアは ${score} pt でした！`);
+    }
+
+    // 固定30 FPSのゲームループ制御
+    function gameLoop(timestamp) {
+      if (!isPlaying) return;
+
+      const elapsed = timestamp - lastFrameTime;
+
+      if (elapsed >= frameInterval) {
+        // 経過時間から余剰分を引いて補正
+        lastFrameTime = timestamp - (elapsed % frameInterval);
+        update();
+      }
+
+      requestAnimationFrame(gameLoop);
     }
 
     function update() {
@@ -362,7 +379,7 @@
       } else if (isPlaying && mouseSpeed > 180) {
         score = Math.max(0, score - 30);
         scoreEl.textContent = score;
-        penaltyMessageTimer = 30;
+        penaltyMessageTimer = 15; // 30fpsに合わせて調整
         mouseSpeed = 0;
       }
 
@@ -415,7 +432,6 @@
           continue;
         }
 
-        // 着色された落ち葉キャンバスを描画
         const leafCanvas = coloredLeafCanvases[leaf.colorType] || images.leaf;
         if (leafCanvas) {
           ctx.save();
@@ -525,10 +541,6 @@
         ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('⚠️ 振り回しすぎ！ -30pt', canvas.width / 2, 70);
-      }
-
-      if (isPlaying) {
-        requestAnimationFrame(update);
       }
     }
 
