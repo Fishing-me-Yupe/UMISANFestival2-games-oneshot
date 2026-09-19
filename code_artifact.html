@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>秋の味覚 一本釣りゲーム</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #fceabb;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      text-align: center;
+      user-select: none;
+      overflow-x: hidden;
+    }
+    h1 {
+      margin: 15px 0 5px;
+      color: #8b4513;
+      font-size: clamp(20px, 5vw, 32px);
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+    }
+    canvas {
+      background-color: #fff8dc;
+      border: 4px solid #8b4513;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      cursor: crosshair;
+      max-width: 100%;
+      height: auto;
+      touch-action: none;
+    }
+    .ui-panel {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      width: 90%;
+      max-width: 800px;
+      margin: 10px auto;
+      font-size: clamp(14px, 3.5vw, 18px);
+      font-weight: bold;
+      color: #5c2c0c;
+      background: rgba(255, 255, 255, 0.6);
+      padding: 8px 15px;
+      border-radius: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-sizing: border-box;
+    }
+    .btn-group {
+      margin-top: 15px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+    }
+    .action-btn {
+      padding: 10px 22px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      background-color: #e67e22;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px #d35400;
+      transition: all 0.1s;
+    }
+    .action-btn:active {
+      box-shadow: 0 0 #d35400;
+      transform: translateY(4px);
+    }
+    .action-btn:disabled {
+      background-color: #bdc3c7;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    #collection-btn {
+      background-color: #d35400;
+      box-shadow: 0 4px #a04000;
+    }
+    #collection-btn:active {
+      box-shadow: 0 0 #a04000;
+    }
+
+    /* モーダル共通スタイル */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* 獲得ポップアップ特有スタイル */
+    .get-modal-content {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1002;
+    }
+    .get-title {
+      color: #fff;
+      font-size: clamp(24px, 6vw, 36px);
+      font-weight: bold;
+      text-shadow: 0 4px 8px rgba(0,0,0,0.8), 0 0 12px #e67e22;
+      margin-bottom: 25px;
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    /* カード風フレーム (写真の橙赤枠再現) */
+    .reward-card {
+      width: 240px;
+      height: 240px;
+      background-color: #ffffff;
+      border-radius: 36px;
+      padding: 12px;
+      box-sizing: border-box;
+      box-shadow: 0 0 0 8px #ff3b00, 0 0 0 16px #ff8800, 0 15px 35px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: rotate(-7deg);
+      animation: cardSway 3s ease-in-out infinite alternate, cardPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      background-clip: padding-box;
+    }
+    .reward-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    @keyframes cardSway {
+      0% { transform: rotate(-8deg) scale(1); }
+      100% { transform: rotate(8deg) scale(1.03); }
+    }
+    @keyframes cardPop {
+      0% { transform: scale(0) rotate(-30deg); }
+      100% { transform: scale(1) rotate(-7deg); }
+    }
+    @keyframes popIn {
+      0% { opacity: 0; transform: translateY(-20px) scale(0.8); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* パーティクル用キャンバス */
+    #particleCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1001;
+    }
+
+    /* コレクションモーダル */
+    .collection-box {
+      background: #fff8dc;
+      border: 4px solid #8b4513;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      padding: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      overflow-y: auto;
+    }
+    .collection-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .collection-item {
+      background: #fceabb;
+      border: 2px solid #d35400;
+      border-radius: 12px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .collection-item.locked {
+      filter: grayscale(100%);
+      opacity: 0.5;
+    }
+    .collection-item img {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+    }
+    .collection-item .item-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #5c2c0c;
+      margin-top: 5px;
+    }
+    .collection-item .item-req {
+      font-size: 10px;
+      color: #8b4513;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🍂 秋の味覚 一本釣りゲーム 🎣</h1>
+  
+  <div class="ui-panel">
+    <div>残り時間: <span id="time">30</span> 秒</div>
+    <div>今回スコア: <span id="score">0</span> pt</div>
+    <div>通算ポイント: <span id="total-score">0</span> pt</div>
+  </div>
+
+  <div id="game-container">
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
+  </div>
+
+  <div class="btn-group">
+    <button id="start-btn" class="action-btn">ゲームスタート！</button>
+    <button id="collection-btn" class="action-btn">図鑑を見る</button>
+  </div>
+
+  <!-- 獲得モーダル -->
+  <div id="get-modal" class="modal-overlay">
+    <canvas id="particleCanvas"></canvas>
+    <div class="get-modal-content">
+      <div id="get-title-text" class="get-title">「かぼちゃとレンコンの煮物」ゲット‼︎</div>
+      <div class="reward-card">
+        <img id="get-dish-img" src="" alt="dish">
+      </div>
+      <button id="get-close-btn" class="action-btn" style="margin-top: 35px; z-index: 1003;">次へすすむ</button>
+    </div>
+  </div>
+
+  <!-- コレクション図鑑モーダル -->
+  <div id="collection-modal" class="modal-overlay">
+    <div class="collection-box">
+      <h2 style="color: #8b4513; margin-top: 0;">🍁 秋の料理コレクション 🍁</h2>
+      <div id="collection-grid" class="collection-grid"></div>
+      <button id="collection-close-btn" class="action-btn" style="margin-top: 20px;">とじる</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const totalScoreEl = document.getElementById('total-score');
+    const timeEl = document.getElementById('time');
+    const startBtn = document.getElementById('start-btn');
+    const collectionBtn = document.getElementById('collection-btn');
+
+    const getModal = document.getElementById('get-modal');
+    const getTitleText = document.getElementById('get-title-text');
+    const getDishImg = document.getElementById('get-dish-img');
+    const getCloseBtn = document.getElementById('get-close-btn');
+
+    const collectionModal = document.getElementById('collection-modal');
+    const collectionGrid = document.getElementById('collection-grid');
+    const collectionCloseBtn = document.getElementById('collection-close-btn');
+
+    const particleCanvas = document.getElementById('particleCanvas');
+    const pCtx = particleCanvas.getContext('2d');
+
+    const BASE_URL = 'https://fishing-me-yupe.github.io/oneshot-assets/';
+
+    const rewardDishes = [
+      { id: 1, key: 'dish1', file: 'pumpkin-and-lotus-stew.svg', name: 'かぼちゃとレンコンの煮物', reqScore: 6000 },
+      { id: 2, key: 'dish2', file: 'japanese-mixed-rice.svg', name: '炊き込みご飯', reqScore: 12000 },
+      { id: 3, key: 'dish3', file: 'grilled-pacific-saury.svg', name: '焼き秋刀魚', reqScore: 18000 },
+      { id: 4, key: 'dish4', file: 'apple-and-pear-pie.svg', name: 'りんごと梨のパイ', reqScore: 24000 },
+      { id: 5, key: 'dish5', file: 'seafood-rice-bowl.svg', name: '海鮮丼', reqScore: 30000 },
+      { id: 6, key: 'dish6', file: 'parfait.svg', name: 'パフェ', reqScore: 36000 },
+      { id: 7, key: 'dish7', file: 'lunch-box.svg', name: '弁当', reqScore: 42000 }
+    ];
+
+    const imageSources = {
+      kaki: BASE_URL + 'persimmon.svg',
+      satsumaimo: BASE_URL + 'sweetpotato.svg',
+      sanma: BASE_URL + 'pacific-saury.svg',
+      budou: BASE_URL + 'grapes.svg',
+      nashi: BASE_URL + 'pears.svg',
+      kabocha: BASE_URL + 'pumpkin.svg',
+      kinoko: BASE_URL + 'mushrooms.svg',
+      apple: BASE_URL + 'apple.svg',
+      marron: BASE_URL + 'marron.svg',
+      rice: BASE_URL + 'rice.svg',
+      salmon: BASE_URL + 'salmon.svg',
+      lotus: BASE_URL + 'lotus-roots.svg',
+      arm: BASE_URL + 'arm.svg',
+      leaf: BASE_URL + 'leaf.svg'
+    };
+
+    rewardDishes.forEach(dish => {
+      imageSources[dish.key] = BASE_URL + dish.file;
+    });
+
+    const images = {};
+    let loadedImageCount = 0;
+    const totalImages = Object.keys(imageSources).length;
+
+    const coloredLeafCanvases = {
+      red: null,
+      yellow: null,
+      orange: null
+    };
+
+    for (let key in imageSources) {
+      images[key] = new Image();
+      images[key].src = imageSources[key];
+      images[key].onload = () => {
+        loadedImageCount++;
+        if (key === 'leaf') {
+          createColoredLeaves(images[key]);
+        }
+      };
+    }
+
+    function createColoredLeaves(leafImg) {
+      const colors = {
+        red: '#e74c3c',
+        yellow: '#f1c40f',
+        orange: '#e67e22'
+      };
+
+      const w = leafImg.naturalWidth || 100;
+      const h = leafImg.naturalHeight || 100;
+
+      for (let colorKey in colors) {
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = w;
+        offCanvas.height = h;
+        const offCtx = offCanvas.getContext('2d');
+
+        offCtx.drawImage(leafImg, 0, 0, w, h);
+        offCtx.globalCompositeOperation = 'source-in';
+        offCtx.fillStyle = colors[colorKey];
+        offCtx.fillRect(0, 0, w, h);
+
+        coloredLeafCanvases[colorKey] = offCanvas;
+      }
+    }
+
+    let score = 0;
+    let totalScore = parseInt(localStorage.getItem('fishing_game_total_score') || '0', 10);
+    let unlockedDishIds = JSON.parse(localStorage.getItem('fishing_game_unlocked_dishes') || '[]');
+    let unlockQueue = [];
+
+    totalScoreEl.textContent = totalScore;
+
+    let timeLeft = 30;
+    let gameTimeout = null;
+    let leafSpawnTimeout = null;
+    let timerInterval = null;
+    let isPlaying = false;
+
+    const FPS = 45;
+    const frameInterval = 1000 / FPS;
+    let lastFrameTime = 0;
+
+    let targetMousePos = { x: canvas.width / 2, y: 100 };
+    let prevMousePos = { x: canvas.width / 2, y: 100 };
+    let mouseSpeed = 0;
+    let penaltyMessageTimer = 0;
+    let ignorePenaltyFrames = 0;
+
+    const hook = {
+      x: canvas.width / 2,
+      y: 100,
+      size: 18,
+      targetSize: 50,
+      caughtItem: null
+    };
+
+    const itemTypes = [
+      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2.5, weight: 0.9 },
+      { name: '柿', imgKey: 'kaki', score: 120, radius: 25, targetSize: 60, speed: 3.0, weight: 0.8 },
+      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 25, targetSize: 110, speed: 5.2, weight: 1.0 },
+      { name: 'ブドウ', imgKey: 'budou', score: 200, radius: 28, targetSize: 75, speed: 3.5, weight: 0.9 },
+      { name: '梨', imgKey: 'nashi', score: 150, radius: 26, targetSize: 65, speed: 3.2, weight: 0.8 },
+      { name: 'カボチャ', imgKey: 'kabocha', score: 250, radius: 32, targetSize: 85, speed: 2.2, weight: 1.2 },
+      { name: 'キノコ類', imgKey: 'kinoko', score: 80, radius: 22, targetSize: 55, speed: 4.2, weight: 0.6 },
+      { name: 'りんご', imgKey: 'apple', score: 140, radius: 26, targetSize: 65, speed: 3.2, weight: 0.8 },
+      { name: '栗', imgKey: 'marron', score: 90, radius: 22, targetSize: 55, speed: 3.8, weight: 0.6 },
+      { name: '新米', imgKey: 'rice', score: 280, radius: 30, targetSize: 80, speed: 2.8, weight: 1.1 },
+      { name: '鮭', imgKey: 'salmon', score: 320, radius: 27, targetSize: 105, speed: 4.8, weight: 1.1 },
+      { name: 'レンコン', imgKey: 'lotus', score: 160, radius: 28, targetSize: 70, speed: 3.0, weight: 0.9 }
+    ];
+
+    let items = [];
+    let fallingLeaves = [];
+
+    function updateTargetPos(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const currentX = (clientX - rect.left) * scaleX;
+      const currentY = (clientY - rect.top) * scaleY;
+
+      const dx = currentX - prevMousePos.x;
+      const dy = currentY - prevMousePos.y;
+      mouseSpeed = Math.sqrt(dx * dx + dy * dy);
+
+      targetMousePos.x = currentX;
+      targetMousePos.y = currentY;
+      prevMousePos.x = currentX;
+      prevMousePos.y = currentY;
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      updateTargetPos(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('touchstart', (e) => {
+      updateTargetPos(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      updateTargetPos(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+    }, { passive: false });
+
+    function addScore(pts) {
+      score += pts;
+      totalScore += pts;
+      scoreEl.textContent = score;
+      totalScoreEl.textContent = totalScore;
+      localStorage.setItem('fishing_game_total_score', totalScore.toString());
+
+      checkRewardUnlocks();
+    }
+
+    function checkRewardUnlocks() {
+      rewardDishes.forEach(dish => {
+        if (totalScore >= dish.reqScore && !unlockedDishIds.includes(dish.id)) {
+          unlockedDishIds.push(dish.id);
+          localStorage.setItem('fishing_game_unlocked_dishes', JSON.stringify(unlockedDishIds));
+          unlockQueue.push(dish);
+        }
+      });
+
+      if (unlockQueue.length > 0 && !isParticleAnimating) {
+        showNextUnlockModal();
+      }
+    }
+
+    let particleList = [];
+    let isParticleAnimating = false;
+
+    function initParticles() {
+      particleCanvas.width = window.innerWidth;
+      particleCanvas.height = window.innerHeight;
+      particleList = [];
+      const colors = ['red', 'yellow', 'orange'];
+
+      for (let i = 0; i < 70; i++) {
+        particleList.push({
+          x: Math.random() * particleCanvas.width,
+          y: Math.random() * particleCanvas.height - particleCanvas.height,
+          size: 20 + Math.random() * 25,
+          speedX: -2 + Math.random() * 4,
+          speedY: 2 + Math.random() * 3,
+          rot: Math.random() * Math.PI * 2,
+          rotSpeed: -0.05 + Math.random() * 0.1,
+          colorType: colors[Math.floor(Math.random() * colors.length)]
+        });
+      }
+    }
+
+    function renderParticles() {
+      if (!isParticleAnimating) return;
+      pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+
+      particleList.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        p.rot += p.rotSpeed;
+
+        if (p.y > particleCanvas.height + 50) {
+          p.y = -40;
+          p.x = Math.random() * particleCanvas.width;
+        }
+
+        const leafCanvas = coloredLeafCanvases[p.colorType];
+        if (leafCanvas) {
+          pCtx.save();
+          pCtx.translate(p.x, p.y);
+          pCtx.rotate(p.rot);
+          pCtx.drawImage(leafCanvas, -p.size / 2, -p.size / 2, p.size, p.size);
+          pCtx.restore();
+        }
+      });
+
+      requestAnimationFrame(renderParticles);
+    }
+
+    function showNextUnlockModal() {
+      if (unlockQueue.length === 0) {
+        getModal.classList.remove('active');
+        isParticleAnimating = false;
+        return;
+      }
+
+      const dish = unlockQueue.shift();
+      getTitleText.textContent = `「${dish.name}」ゲット‼︎`;
+      getDishImg.src = imageSources[dish.key];
+
+      getModal.classList.add('active');
+      isParticleAnimating = true;
+      initParticles();
+      renderParticles();
+    }
+
+    getCloseBtn.addEventListener('click', () => {
+      if (unlockQueue.length > 0) {
+        showNextUnlockModal();
+      } else {
+        getModal.classList.remove('active');
+        isParticleAnimating = false;
+      }
+    });
+
+    function renderCollection() {
+      collectionGrid.innerHTML = '';
+      rewardDishes.forEach(dish => {
+        const isUnlocked = unlockedDishIds.includes(dish.id);
+        const itemDiv = document.createElement('div');
+        itemDiv.className = `collection-item ${isUnlocked ? '' : 'locked'}`;
+
+        itemDiv.innerHTML = `
+          <img src="${imageSources[dish.key]}" alt="${dish.name}">
+          <div class="item-title">${isUnlocked ? dish.name : '？？？？'}</div>
+          <div class="item-req">${dish.reqScore.toLocaleString()} pt</div>
+        `;
+        collectionGrid.appendChild(itemDiv);
+      });
+    }
+
+    collectionBtn.addEventListener('click', () => {
+      renderCollection();
+      collectionModal.classList.add('active');
+    });
+
+    collectionCloseBtn.addEventListener('click', () => {
+      collectionModal.classList.remove('active');
+    });
+
+    function scheduleNextSpawn() {
+      if (!isPlaying) return;
+
+      let maxItems = 4;
+      let speedMultiplier = 1.0;
+      let spawnDelay = 1200;
+
+      if (timeLeft <= 10) {
+        maxItems = 7;
+        speedMultiplier = 1.4;
+        spawnDelay = 600;
+      } else if (timeLeft <= 20) {
+        maxItems = 6;
+        speedMultiplier = 1.2;
+        spawnDelay = 900;
+      }
+
+      if (items.length < maxItems) {
+        const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+        const direction = Math.random() < 0.5 ? 1 : -1;
+        const x = direction === 1 ? -60 : canvas.width + 60;
+        const y = Math.random() * (canvas.height - 230) + 170;
+
+        items.push({
+          ...type,
+          x: x,
+          y: y,
+          vx: type.speed * speedMultiplier * direction,
+          direction: direction,
+          isFalling: false,
+          id: Math.random()
+        });
+      }
+
+      gameTimeout = setTimeout(scheduleNextSpawn, spawnDelay);
+    }
+
+    function scheduleLeafSpawn() {
+      if (!isPlaying) return;
+
+      const rand = Math.random();
+      let colorType = 'red';
+      if (rand < 4 / 12) {
+        colorType = 'yellow';
+      } else if (rand < (4 + 3) / 12) {
+        colorType = 'orange';
+      }
+
+      fallingLeaves.push({
+        x: Math.random() * (canvas.width - 100) + 50,
+        y: -40,
+        size: 35 + Math.random() * 15,
+        speedY: 1.2 + Math.random() * 1.0,
+        swingSpeed: 0.03 + Math.random() * 0.02,
+        swingWidth: 30 + Math.random() * 20,
+        phase: Math.random() * Math.PI * 2,
+        colorType: colorType,
+        radius: 18
+      });
+
+      const nextDelay = 1200 + Math.random() * 1500;
+      leafSpawnTimeout = setTimeout(scheduleLeafSpawn, nextDelay);
+    }
+
+    function startGame() {
+      if (loadedImageCount < totalImages) {
+        alert('画像の読み込み中です。少々お待ちください。');
+        return;
+      }
+
+      score = 0;
+      timeLeft = 30;
+      items = [];
+      fallingLeaves = [];
+      hook.caughtItem = null;
+      hook.x = canvas.width / 2;
+      hook.y = 100;
+      targetMousePos.x = canvas.width / 2;
+      targetMousePos.y = 100;
+      prevMousePos.x = canvas.width / 2;
+      prevMousePos.y = 100;
+      penaltyMessageTimer = 0;
+      ignorePenaltyFrames = 68;
+      isPlaying = true;
+      lastFrameTime = performance.now();
+      
+      scoreEl.textContent = score;
+      timeEl.textContent = timeLeft;
+      startBtn.disabled = true;
+
+      if (gameTimeout) clearTimeout(gameTimeout);
+      if (leafSpawnTimeout) clearTimeout(leafSpawnTimeout);
+
+      scheduleNextSpawn();
+      scheduleLeafSpawn();
+
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        timeEl.textContent = timeLeft;
+        if (timeLeft <= 0) {
+          endGame();
+        }
+      }, 1000);
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      isPlaying = false;
+      if (gameTimeout) clearTimeout(gameTimeout);
+      if (leafSpawnTimeout) clearTimeout(leafSpawnTimeout);
+      clearInterval(timerInterval);
+      startBtn.disabled = false;
+      
+      setTimeout(() => {
+        alert(`タイムアップ！ 今回のスコア: ${score} pt\n通算ポイント: ${totalScore} pt`);
+      }, 100);
+    }
+
+    function gameLoop(timestamp) {
+      if (!isPlaying) return;
+
+      const elapsed = timestamp - lastFrameTime;
+
+      if (elapsed >= frameInterval) {
+        lastFrameTime = timestamp - (elapsed % frameInterval);
+        update();
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const dxMouse = targetMousePos.x - hook.x;
+      const dyMouse = targetMousePos.y - hook.y;
+      const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+
+      let followSpeed = 0.4;
+      if (hook.caughtItem) {
+        followSpeed = 0.28 / hook.caughtItem.weight;
+      }
+
+      hook.x += dxMouse * followSpeed;
+      hook.y += dyMouse * followSpeed;
+
+      if (ignorePenaltyFrames > 0) {
+        ignorePenaltyFrames--;
+        mouseSpeed = 0;
+      } else if (isPlaying && mouseSpeed > 180) {
+        score = Math.max(0, score - 30);
+        scoreEl.textContent = score;
+        penaltyMessageTimer = 22;
+        mouseSpeed = 0;
+      }
+
+      if (hook.caughtItem && distMouse > 250) {
+        dropCaughtItem();
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(hook.x, hook.y);
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const armImg = images.arm;
+      if (armImg && armImg.complete) {
+        let drawW = hook.targetSize;
+        let drawH = hook.targetSize;
+
+        if (armImg.naturalWidth && armImg.naturalHeight) {
+          const ratio = armImg.naturalWidth / armImg.naturalHeight;
+          if (ratio >= 1) {
+            drawH = hook.targetSize / ratio;
+          } else {
+            drawW = hook.targetSize * ratio;
+          }
+        }
+
+        ctx.save();
+        ctx.translate(hook.x, hook.y);
+        ctx.drawImage(armImg, -drawW, -4, drawW, drawH);
+        ctx.restore();
+      }
+
+      for (let i = fallingLeaves.length - 1; i >= 0; i--) {
+        let leaf = fallingLeaves[i];
+
+        leaf.y += leaf.speedY;
+        leaf.phase += leaf.swingSpeed;
+
+        const currentX = leaf.x + Math.sin(leaf.phase) * leaf.swingWidth;
+        const angle = Math.cos(leaf.phase) * 0.5;
+        const scaleX = Math.sin(leaf.phase * 1.5);
+
+        if (leaf.y > canvas.height + 50) {
+          fallingLeaves.splice(i, 1);
+          continue;
+        }
+
+        const leafCanvas = coloredLeafCanvases[leaf.colorType] || images.leaf;
+        if (leafCanvas) {
+          ctx.save();
+          ctx.translate(currentX, leaf.y);
+          ctx.rotate(angle);
+          ctx.scale(scaleX, 1);
+          ctx.drawImage(leafCanvas, -leaf.size / 2, -leaf.size / 2, leaf.size, leaf.size);
+          ctx.restore();
+        }
+
+        if (isPlaying) {
+          let checkX = hook.x;
+          let checkY = hook.y;
+          let checkRadius = hook.size;
+
+          if (hook.caughtItem) {
+            checkX = hook.caughtItem.x;
+            checkY = hook.caughtItem.y;
+            checkRadius = hook.caughtItem.radius;
+          }
+
+          const distDX = currentX - checkX;
+          const distDY = leaf.y - checkY;
+          const distance = Math.sqrt(distDX * distDX + distDY * distDY);
+
+          if (distance < leaf.radius + checkRadius) {
+            if (hook.caughtItem) {
+              dropCaughtItem();
+            }
+          }
+        }
+      }
+
+      for (let i = items.length - 1; i >= 0; i--) {
+        let item = items[i];
+        const img = images[item.imgKey];
+
+        let drawWidth = item.targetSize;
+        let drawHeight = item.targetSize;
+
+        if (img && img.naturalWidth && img.naturalHeight) {
+          const aspectRatio = img.naturalWidth / img.naturalHeight;
+          if (aspectRatio >= 1) {
+            drawWidth = item.targetSize;
+            drawHeight = item.targetSize / aspectRatio;
+          } else {
+            drawHeight = item.targetSize;
+            drawWidth = item.targetSize * aspectRatio;
+          }
+        }
+
+        if (item === hook.caughtItem) {
+          item.x = hook.x - drawWidth / 4;
+          item.y = hook.y + drawHeight / 2;
+
+          if (hook.y < 50) {
+            addScore(item.score);
+            items.splice(i, 1);
+            hook.caughtItem = null;
+            continue;
+          }
+        } else if (item.isFalling) {
+          item.vy += 0.4;
+          item.y += item.vy;
+
+          if (item.y > canvas.height + 60) {
+            items.splice(i, 1);
+            continue;
+          }
+        } else {
+          item.x += item.vx;
+
+          if (item.x < -70 || item.x > canvas.width + 70) {
+            items.splice(i, 1);
+            continue;
+          }
+
+          if (!hook.caughtItem && isPlaying) {
+            const dx = hook.x - item.x;
+            const dy = hook.y - item.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < hook.size + item.radius) {
+              hook.caughtItem = item;
+            }
+          }
+        }
+
+        if (img && img.complete) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          if (item.direction === 1) {
+            ctx.scale(-1, 1);
+          }
+          ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+          ctx.restore();
+        }
+      }
+
+      if (penaltyMessageTimer > 0) {
+        penaltyMessageTimer--;
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠️ 振り回しすぎ！ -30pt', canvas.width / 2, 70);
+      }
+    }
+
+    function dropCaughtItem() {
+      if (hook.caughtItem) {
+        hook.caughtItem.isFalling = true;
+        hook.caughtItem.vy = 2;
+        hook.caughtItem = null;
+      }
+    }
+
+    startBtn.addEventListener('click', startGame);
+  </script>
+</body>
+</html>
