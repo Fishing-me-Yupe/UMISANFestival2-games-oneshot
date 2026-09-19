@@ -1,4 +1,4 @@
-      <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -156,22 +156,29 @@
       padding: 10px;
     }
     .collection-item {
-      background: #fff8dc;
-      border: 2px solid #8b4513;
+      background: #eee;
+      border: 2px solid #bdc3c7;
       border-radius: 10px;
       padding: 5px;
       font-size: 11px;
-      opacity: 0.4;
-    }
-    .collection-item.unlocked {
-      opacity: 1;
-      border-color: #e67e22;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      color: #7f8c8d;
     }
     .collection-item img {
       width: 100%;
       height: 60px;
       object-fit: contain;
+      filter: grayscale(100%);
+      opacity: 0.5;
+    }
+    .collection-item.unlocked {
+      background: #fff8dc;
+      border-color: #e67e22;
+      color: #5c2c0c;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .collection-item.unlocked img {
+      filter: grayscale(0%);
+      opacity: 1;
     }
   </style>
 </head>
@@ -191,7 +198,7 @@
 
   <div style="margin-top: 10px; margin-bottom: 20px;">
     <button id="start-btn" class="btn">ゲームスタート！</button>
-    <button id="collection-btn" class="btn" style="background-color: #8b4513;">ずかん</button>
+    <button id="collection-btn" class="btn" style="background-color: #8b4513;">図鑑</button>
   </div>
 
   <div id="reward-modal" class="modal-overlay">
@@ -211,7 +218,7 @@
 
   <div id="collection-modal" class="modal-overlay">
     <div class="reward-card-container" style="width: 450px;">
-      <h2>獲得レシピ一覧</h2>
+      <h2>図鑑</h2>
       <div id="collection-grid" class="collection-grid"></div>
       <button id="collection-close-btn" class="btn" style="margin-top: 15px;">閉じる</button>
     </div>
@@ -618,7 +625,7 @@
 
         const ptsEl = document.createElement('div');
         ptsEl.style.fontSize = '9px';
-        ptsEl.style.color = '#7f8c8d';
+        ptsEl.style.color = isUnlocked ? '#7f8c8d' : '#a0a0a0';
         ptsEl.textContent = `${r.req}pt`;
 
         itemEl.appendChild(imgEl);
