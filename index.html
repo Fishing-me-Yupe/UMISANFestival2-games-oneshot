@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>秋の味覚 一本釣りゲーム</title>
   
-  <!-- PWA Manifest -->
-  <link rel="manifest" href='data:application/manifest+json,{"name":"秋の味覚 一本釣りゲーム","short_name":"一本釣り","start_url":".","display":"standalone","background_color":"#ffe1b3","theme_color":"#e68a00"}'>
+  <!-- PWA Manifest & App Icon -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"秋の味覚 一本釣りゲーム","short_name":"一本釣り","start_url":"./","display":"standalone","background_color":"#ffe1b3","theme_color":"#e68a00","icons":[{"src":"https://fishing-me-yupe.github.io/oneshot-assets/persimmon.svg","sizes":"192x192 512x512","type":"image/svg+xml","purpose":"any maskable"}]}'>
+  <meta name="theme-color" content="#e68a00">
+  <link rel="apple-touch-icon" href="https://fishing-me-yupe.github.io/oneshot-assets/persimmon.svg">
 
   <style>
     body {
@@ -63,6 +65,8 @@
       width: 100%;
       height: auto;
       touch-action: none;
+      /* 解像度制限時の拡大補間を滑らかにする設定 */
+      image-rendering: auto;
     }
 
     .ui-panel {
@@ -274,7 +278,8 @@
     </div>
 
     <div id="game-container">
-      <canvas id="gameCanvas" width="800" height="500"></canvas>
+      <!-- 内部解像度を制限(640x400)して軽量化。見た目の大きさはCSSで可変 -->
+      <canvas id="gameCanvas" width="640" height="400"></canvas>
     </div>
 
     <div style="margin-top: 10px;">
@@ -332,29 +337,40 @@
     // --- 1. Windows OS のみの判定 ---
     function isWindowsOS() {
       const userAgent = navigator.userAgent.toLowerCase();
-      // Windows 判定 (Win16 / Win32 / Win64 / Windows Phone 等を含む)
       return /win/i.test(userAgent) || /windows/i.test(userAgent);
     }
 
     const isWindows = isWindowsOS();
-    const fileExt = isWindows ? '.png' : '.svg'; // WindowsのみPNG、Mac/iPad/iPhone/Android等はSVGを使用
+    const fileExt = isWindows ? '.png' : '.svg';
 
-    // --- 2. Service Worker 登録 (軽量オフライン対応) ---
+    // --- 2. Service Worker 登録 (1ファイル完結・完全オフライン対応) ---
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         const swCode = `
-          const CACHE_NAME = 'oneshot-v2';
+          const CACHE_NAME = 'oneshot-v5';
           self.addEventListener('install', (e) => {
+            self.skipWaiting();
             e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
+          });
+          self.addEventListener('activate', (e) => {
+            e.waitUntil(
+              caches.keys().then(keys => Promise.all(
+                keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null)
+              )).then(() => self.clients.claim())
+            );
           });
           self.addEventListener('fetch', (e) => {
             e.respondWith(
-              caches.match(e.request).then(res => res || fetch(e.request).then(response => {
-                return caches.open(CACHE_NAME).then(cache => {
-                  cache.put(e.request, response.clone());
+              caches.match(e.request).then(res => {
+                if (res) return res;
+                return fetch(e.request).then(response => {
+                  if (response && response.status === 200) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+                  }
                   return response;
-                });
-              }))
+                }).catch(() => caches.match('./'));
+              })
             );
           });
         `;
@@ -445,8 +461,8 @@
 
     function createColoredLeaves(leafImg) {
       const colors = { red: '#e74c3c', yellow: '#f1c40f', orange: '#e67e22' };
-      const w = leafImg.naturalWidth || 100;
-      const h = leafImg.naturalHeight || 100;
+      const w = leafImg.naturalWidth || 80;
+      const h = leafImg.naturalHeight || 80;
 
       for (let colorKey in colors) {
         const offCanvas = document.createElement('canvas');
@@ -527,27 +543,28 @@
     const frameInterval = 1000 / FPS;
     let lastFrameTime = 0;
 
-    let targetMousePos = { x: canvas.width / 2, y: 100 };
-    let prevMousePos = { x: canvas.width / 2, y: 100 };
+    let targetMousePos = { x: canvas.width / 2, y: 80 };
+    let prevMousePos = { x: canvas.width / 2, y: 80 };
     let mouseSpeed = 0;
     let penaltyMessageTimer = 0;
     let ignorePenaltyFrames = 0;
 
-    const hook = { x: canvas.width / 2, y: 100, size: 18, targetSize: 50, caughtItem: null };
+    // スケール調整に合わせてサイズを微調整
+    const hook = { x: canvas.width / 2, y: 80, size: 15, targetSize: 42, caughtItem: null };
 
     const itemTypes = [
-      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 30, targetSize: 80, speed: 2.5, weight: 0.9 },
-      { name: '柿', imgKey: 'kaki', score: 120, radius: 25, targetSize: 60, speed: 3.0, weight: 0.8 },
-      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 25, targetSize: 110, speed: 5.2, weight: 1.0 },
-      { name: 'ブドウ', imgKey: 'budou', score: 200, radius: 28, targetSize: 75, speed: 3.5, weight: 0.9 },
-      { name: '梨', imgKey: 'nashi', score: 150, radius: 26, targetSize: 65, speed: 3.2, weight: 0.8 },
-      { name: 'カボチャ', imgKey: 'kabocha', score: 250, radius: 32, targetSize: 85, speed: 2.2, weight: 1.2 },
-      { name: 'キノコ類', imgKey: 'kinoko', score: 80, radius: 22, targetSize: 55, speed: 4.2, weight: 0.6 },
-      { name: 'りんご', imgKey: 'apple', score: 140, radius: 26, targetSize: 65, speed: 3.2, weight: 0.8 },
-      { name: '栗', imgKey: 'marron', score: 90, radius: 22, targetSize: 55, speed: 3.8, weight: 0.6 },
-      { name: '新米', imgKey: 'rice', score: 280, radius: 30, targetSize: 80, speed: 2.8, weight: 1.1 },
-      { name: '鮭', imgKey: 'salmon', score: 320, radius: 27, targetSize: 105, speed: 4.8, weight: 1.1 },
-      { name: 'レンコン', imgKey: 'lotus', score: 160, radius: 28, targetSize: 70, speed: 3.0, weight: 0.9 }
+      { name: 'さつまいも', imgKey: 'satsumaimo', score: 100, radius: 24, targetSize: 64, speed: 2.0, weight: 0.9 },
+      { name: '柿', imgKey: 'kaki', score: 120, radius: 20, targetSize: 48, speed: 2.4, weight: 0.8 },
+      { name: '秋刀魚', imgKey: 'sanma', score: 300, radius: 20, targetSize: 88, speed: 4.2, weight: 1.0 },
+      { name: 'ブドウ', imgKey: 'budou', score: 200, radius: 22, targetSize: 60, speed: 2.8, weight: 0.9 },
+      { name: '梨', imgKey: 'nashi', score: 150, radius: 21, targetSize: 52, speed: 2.6, weight: 0.8 },
+      { name: 'カボチャ', imgKey: 'kabocha', score: 250, radius: 26, targetSize: 68, speed: 1.8, weight: 1.2 },
+      { name: 'キノコ類', imgKey: 'kinoko', score: 80, radius: 18, targetSize: 44, speed: 3.4, weight: 0.6 },
+      { name: 'りんご', imgKey: 'apple', score: 140, radius: 21, targetSize: 52, speed: 2.6, weight: 0.8 },
+      { name: '栗', imgKey: 'marron', score: 90, radius: 18, targetSize: 44, speed: 3.0, weight: 0.6 },
+      { name: '新米', imgKey: 'rice', score: 280, radius: 24, targetSize: 64, speed: 2.2, weight: 1.1 },
+      { name: '鮭', imgKey: 'salmon', score: 320, radius: 22, targetSize: 84, speed: 3.8, weight: 1.1 },
+      { name: 'レンコン', imgKey: 'lotus', score: 160, radius: 22, targetSize: 56, speed: 2.4, weight: 0.9 }
     ];
 
     let items = [];
@@ -604,8 +621,8 @@
       if (items.length < maxItems) {
         const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
         const direction = Math.random() < 0.5 ? 1 : -1;
-        const x = direction === 1 ? -60 : canvas.width + 60;
-        const y = Math.random() * (canvas.height - 230) + 170;
+        const x = direction === 1 ? -50 : canvas.width + 50;
+        const y = Math.random() * (canvas.height - 180) + 130;
 
         items.push({
           ...type,
@@ -633,15 +650,15 @@
       }
 
       fallingLeaves.push({
-        x: Math.random() * (canvas.width - 100) + 50,
-        y: -40,
-        size: 35 + Math.random() * 15,
-        speedY: 1.2 + Math.random() * 1.0,
+        x: Math.random() * (canvas.width - 80) + 40,
+        y: -30,
+        size: 28 + Math.random() * 12,
+        speedY: 1.0 + Math.random() * 0.8,
         swingSpeed: 0.03 + Math.random() * 0.02,
-        swingWidth: 30 + Math.random() * 20,
+        swingWidth: 24 + Math.random() * 16,
         phase: Math.random() * Math.PI * 2,
         colorType: colorType,
-        radius: 18
+        radius: 14
       });
 
       const nextDelay = 1200 + Math.random() * 1500;
@@ -660,11 +677,11 @@
       fallingLeaves = [];
       hook.caughtItem = null;
       hook.x = canvas.width / 2;
-      hook.y = 100;
+      hook.y = 80;
       targetMousePos.x = canvas.width / 2;
-      targetMousePos.y = 100;
+      targetMousePos.y = 80;
       prevMousePos.x = canvas.width / 2;
-      prevMousePos.y = 100;
+      prevMousePos.y = 80;
       penaltyMessageTimer = 0;
       ignorePenaltyFrames = 68;
       isPlaying = true;
@@ -856,14 +873,14 @@
       if (ignorePenaltyFrames > 0) {
         ignorePenaltyFrames--;
         mouseSpeed = 0;
-      } else if (isPlaying && mouseSpeed > 180) {
+      } else if (isPlaying && mouseSpeed > 140) {
         score = Math.max(0, score - 30);
         scoreEl.textContent = score;
         penaltyMessageTimer = 22;
         mouseSpeed = 0;
       }
 
-      if (hook.caughtItem && distMouse > 250) dropCaughtItem();
+      if (hook.caughtItem && distMouse > 200) dropCaughtItem();
 
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2, 0);
@@ -899,7 +916,7 @@
         const angle = Math.cos(leaf.phase) * 0.5;
         const scaleX = Math.sin(leaf.phase * 1.5);
 
-        if (leaf.y > canvas.height + 50) {
+        if (leaf.y > canvas.height + 40) {
           fallingLeaves.splice(i, 1);
           continue;
         }
@@ -946,7 +963,7 @@
           item.x = hook.x - drawWidth / 4;
           item.y = hook.y + drawHeight / 2;
 
-          if (hook.y < 50) {
+          if (hook.y < 40) {
             score += item.score;
             scoreEl.textContent = score;
             items.splice(i, 1);
@@ -954,17 +971,17 @@
             continue;
           }
         } else if (item.isFalling) {
-          item.vy += 0.4;
+          item.vy += 0.35;
           item.y += item.vy;
 
-          if (item.y > canvas.height + 60) {
+          if (item.y > canvas.height + 50) {
             items.splice(i, 1);
             continue;
           }
         } else {
           item.x += item.vx;
 
-          if (item.x < -70 || item.x > canvas.width + 70) {
+          if (item.x < -60 || item.x > canvas.width + 60) {
             items.splice(i, 1);
             continue;
           }
@@ -990,9 +1007,9 @@
       if (penaltyMessageTimer > 0) {
         penaltyMessageTimer--;
         ctx.fillStyle = '#e74c3c';
-        ctx.font = 'bold 24px sans-serif';
+        ctx.font = 'bold 20px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('⚠️ 振り回しすぎ！ -30pt', canvas.width / 2, 70);
+        ctx.fillText('⚠️ 振り回しすぎ！ -30pt', canvas.width / 2, 55);
       }
     }
 
