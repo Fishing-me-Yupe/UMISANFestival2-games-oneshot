@@ -277,7 +277,6 @@
     </div>
 
     <div id="game-container">
-      <!-- 800x500 解像度に設定 -->
       <canvas id="gameCanvas" width="800" height="500"></canvas>
     </div>
 
@@ -346,7 +345,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         const swCode = `
-          const CACHE_NAME = 'oneshot-v7';
+          const CACHE_NAME = 'oneshot-v8';
           self.addEventListener('install', (e) => {
             self.skipWaiting();
             e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
@@ -443,19 +442,17 @@
     });
 
     const images = {};
-    const imageUrls = {};
     let loadedImageCount = 0;
     const totalImages = Object.keys(imageSources).length;
     const coloredLeafCanvases = { red: null, yellow: null, orange: null };
 
-    // --- fetch() API による画像読み込み ---
+    // --- メモリリークを防止する fetch 画像読み込み ---
     async function fetchAndLoadImage(key, url) {
       try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
-        imageUrls[key] = objectUrl;
 
         const img = new Image();
         img.src = objectUrl;
@@ -464,6 +461,9 @@
           img.onload = resolve;
           img.onerror = reject;
         });
+
+        // 画像メモリ確保完了後、即座にBlob URLを開放してメモリリークを防止
+        URL.revokeObjectURL(objectUrl);
 
         images[key] = img;
         loadedImageCount++;
@@ -478,9 +478,7 @@
 
     Promise.all(
       Object.keys(imageSources).map(key => fetchAndLoadImage(key, imageSources[key]))
-    ).then(() => {
-      console.log('All images loaded via fetch!');
-    });
+    );
 
     function createColoredLeaves(leafImg) {
       const colors = { red: '#e74c3c', yellow: '#f1c40f', orange: '#e67e22' };
@@ -562,17 +560,12 @@
     let timerInterval = null;
     let isPlaying = false;
 
-    const FPS = 60;
-    const frameInterval = 1000 / FPS;
-    let lastFrameTime = 0;
-
     let targetMousePos = { x: canvas.width / 2, y: 100 };
     let prevMousePos = { x: canvas.width / 2, y: 100 };
     let mouseSpeed = 0;
     let penaltyMessageTimer = 0;
     let ignorePenaltyFrames = 0;
 
-    // 元のサイズ設定 (800x500用)
     const hook = { x: canvas.width / 2, y: 100, size: 18, targetSize: 50, caughtItem: null };
 
     const itemTypes = [
@@ -593,12 +586,10 @@
     let items = [];
     let fallingLeaves = [];
 
-    // PC(Windows)時の解像度・操作用座標計算の最適化
     function updateTargetPos(clientX, clientY, isFirstTouch = false) {
       const rect = canvas.getBoundingClientRect();
-      // Windows PCの場合は固定比率計算で精度のブレを防止
-      const scaleX = isWindows ? (canvas.width / rect.width) : (800 / rect.width);
-      const scaleY = isWindows ? (canvas.height / rect.height) : (500 / rect.height);
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
 
       const currentX = (clientX - rect.left) * scaleX;
       const currentY = (clientY - rect.top) * scaleY;
@@ -710,7 +701,6 @@
       penaltyMessageTimer = 0;
       ignorePenaltyFrames = 68;
       isPlaying = true;
-      lastFrameTime = performance.now();
       
       scoreEl.textContent = score;
       timeEl.textContent = timeLeft;
@@ -764,7 +754,10 @@
       if (pendingRewards.length === 0) return;
       const current = pendingRewards[0];
       rewardTitle.textContent = `${current.name} ゲット‼︎`;
-      rewardImg.src = imageUrls['reward_' + current.id] || (BASE_URL + current.file);
+      
+      const imgObj = images['reward_' + current.id];
+      rewardImg.src = imgObj ? imgObj.src : (BASE_URL + current.file);
+      
       rewardModal.classList.add('active');
       startParticleAnimation();
     }
@@ -850,7 +843,8 @@
         itemEl.className = `collection-item ${isUnlocked ? 'unlocked' : ''}`;
         
         const imgEl = document.createElement('img');
-        imgEl.src = imageUrls['reward_' + r.id] || (BASE_URL + r.file);
+        const imgObj = images['reward_' + r.id];
+        imgEl.src = imgObj ? imgObj.src : (BASE_URL + r.file);
         
         const titleEl = document.createElement('div');
         titleEl.textContent = isUnlocked ? r.name : '???';
@@ -870,14 +864,11 @@
 
     collectionCloseBtn.addEventListener('click', () => collectionModal.classList.remove('active'));
 
-    function gameLoop(timestamp) {
+    // --- 完全な60FPS滑らか同期ループ ---
+    function gameLoop() {
       if (!isPlaying) return;
 
-      const elapsed = timestamp - lastFrameTime;
-      if (elapsed >= frameInterval) {
-        lastFrameTime = timestamp - (elapsed % frameInterval);
-        update();
-      }
+      update();
 
       requestAnimationFrame(gameLoop);
     }
