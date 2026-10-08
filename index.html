@@ -65,7 +65,6 @@
       width: 100%;
       height: auto;
       touch-action: none;
-      /* 解像度制限時の拡大補間を滑らかにする設定 */
       image-rendering: auto;
     }
 
@@ -278,7 +277,6 @@
     </div>
 
     <div id="game-container">
-      <!-- 内部解像度を制限(640x400)して軽量化。見た目の大きさはCSSで可変 -->
       <canvas id="gameCanvas" width="640" height="400"></canvas>
     </div>
 
@@ -343,11 +341,11 @@
     const isWindows = isWindowsOS();
     const fileExt = isWindows ? '.png' : '.svg';
 
-    // --- 2. Service Worker 登録 (1ファイル完結・完全オフライン対応) ---
+    // --- 2. Service Worker 登録 ---
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         const swCode = `
-          const CACHE_NAME = 'oneshot-v5';
+          const CACHE_NAME = 'oneshot-v6';
           self.addEventListener('install', (e) => {
             self.skipWaiting();
             e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
@@ -444,20 +442,45 @@
     });
 
     const images = {};
+    const imageUrls = {}; // Blob URL保持用
     let loadedImageCount = 0;
     const totalImages = Object.keys(imageSources).length;
     const coloredLeafCanvases = { red: null, yellow: null, orange: null };
 
-    for (let key in imageSources) {
-      images[key] = new Image();
-      images[key].src = imageSources[key];
-      images[key].onload = () => {
+    // --- fetch() API を使用した非同期画像読み込み機能 ---
+    async function fetchAndLoadImage(key, url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        imageUrls[key] = objectUrl;
+
+        const img = new Image();
+        img.src = objectUrl;
+        
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+
+        images[key] = img;
         loadedImageCount++;
+
         if (key === 'leaf') {
-          createColoredLeaves(images[key]);
+          createColoredLeaves(img);
         }
-      };
+      } catch (err) {
+        console.error(`Failed to fetch image: ${key}`, err);
+      }
     }
+
+    // すべての画像を fetch で並行取得
+    Promise.all(
+      Object.keys(imageSources).map(key => fetchAndLoadImage(key, imageSources[key]))
+    ).then(() => {
+      console.log('All images loaded via fetch!');
+    });
 
     function createColoredLeaves(leafImg) {
       const colors = { red: '#e74c3c', yellow: '#f1c40f', orange: '#e67e22' };
@@ -549,7 +572,6 @@
     let penaltyMessageTimer = 0;
     let ignorePenaltyFrames = 0;
 
-    // スケール調整に合わせてサイズを微調整
     const hook = { x: canvas.width / 2, y: 80, size: 15, targetSize: 42, caughtItem: null };
 
     const itemTypes = [
@@ -563,7 +585,7 @@
       { name: 'りんご', imgKey: 'apple', score: 140, radius: 21, targetSize: 52, speed: 2.6, weight: 0.8 },
       { name: '栗', imgKey: 'marron', score: 90, radius: 18, targetSize: 44, speed: 3.0, weight: 0.6 },
       { name: '新米', imgKey: 'rice', score: 280, radius: 24, targetSize: 64, speed: 2.2, weight: 1.1 },
-      { name: '鮭', imgKey: 'salmon', score: 320, radius: 22, targetSize: 84, speed: 3.8, weight: 1.1 },
+      { name: '鮭', imgKey: 'salmon', score: 320, radius: 27, targetSize: 84, speed: 3.8, weight: 1.1 },
       { name: 'レンコン', imgKey: 'lotus', score: 160, radius: 22, targetSize: 56, speed: 2.4, weight: 0.9 }
     ];
 
@@ -739,7 +761,7 @@
       if (pendingRewards.length === 0) return;
       const current = pendingRewards[0];
       rewardTitle.textContent = `${current.name} ゲット‼︎`;
-      rewardImg.src = BASE_URL + current.file;
+      rewardImg.src = imageUrls['reward_' + current.id] || (BASE_URL + current.file);
       rewardModal.classList.add('active');
       startParticleAnimation();
     }
@@ -825,7 +847,7 @@
         itemEl.className = `collection-item ${isUnlocked ? 'unlocked' : ''}`;
         
         const imgEl = document.createElement('img');
-        imgEl.src = BASE_URL + r.file;
+        imgEl.src = imageUrls['reward_' + r.id] || (BASE_URL + r.file);
         
         const titleEl = document.createElement('div');
         titleEl.textContent = isUnlocked ? r.name : '???';
