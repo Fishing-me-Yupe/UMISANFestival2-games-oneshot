@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>秋の味覚 一本釣りゲーム</title>
+  
+  <!-- PWA Manifest (Data URI形式で追加) -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"秋の味覚 一本釣りゲーム","short_name":"一本釣り","start_url":".","display":"standalone","background_color":"#ffe1b3","theme_color":"#e68a00"}'>
+
   <style>
     body {
       margin: 0;
@@ -16,7 +20,6 @@
       min-height: 100vh;
     }
 
-    /* 秋っぽい紅葉背景パターン */
     .bg-leaf-pattern {
       position: fixed;
       top: 0;
@@ -140,7 +143,6 @@
       font-size: 22px;
     }
 
-    /* チュートリアルスライド用CSS */
     .slide-container {
       min-height: 200px;
       display: flex;
@@ -327,8 +329,45 @@
   </div>
 
   <script>
+    // --- 1. OS / PC 判定処理 ---
+    function isPC() {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isMobileDevice = /iphone|ipad|ipod|android|blackberry|mini|windows ce|palm/i.test(userAgent);
+      const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      return !isMobileDevice && !hasTouch;
+    }
+
+    const isDesktopPC = isPC();
+    const fileExt = isDesktopPC ? '.png' : '.svg'; // PCの場合はPNGを読み込んでラスタライズ描画コストを削減
+
+    // --- 2. PWA & Service Worker 登録 (軽量・全自動キャッシュ) ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        const swCode = `
+          const CACHE_NAME = 'oneshot-v1';
+          self.addEventListener('install', (e) => {
+            e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
+          });
+          self.addEventListener('fetch', (e) => {
+            e.respondWith(
+              caches.match(e.request).then(res => res || fetch(e.request).then(response => {
+                return caches.open(CACHE_NAME).then(cache => {
+                  cache.put(e.request, response.clone());
+                  return response;
+                });
+              }))
+            );
+          });
+        `;
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+        navigator.serviceWorker.register(swUrl).catch(() => {});
+      });
+    }
+
+    // --- 3. DOM & 基本変数 ---
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false }); // alpha指定でグラフィックパフォーマンス向上
     const scoreEl = document.getElementById('score');
     const totalScoreEl = document.getElementById('total-score');
     const timeEl = document.getElementById('time');
@@ -336,7 +375,6 @@
     const collectionBtn = document.getElementById('collection-btn');
     const howToPlayBtn = document.getElementById('how-to-play-btn');
 
-    // モーダル要素
     const instructionModal = document.getElementById('instruction-modal');
     const slideTitle = document.getElementById('slide-title');
     const slideIcon = document.getElementById('slide-icon');
@@ -355,31 +393,35 @@
 
     const BASE_URL = 'https://fishing-me-yupe.github.io/oneshot-assets/';
 
+    function getFileName(filenameWithoutExt) {
+      return filenameWithoutExt + fileExt;
+    }
+
     const rewardData = [
-      { id: 1, req: 6000, name: 'かぼちゃとレンコンの煮物', file: 'pumpkin-and-lotus-stew.svg' },
-      { id: 2, req: 12000, name: '炊き込みご飯', file: 'japanese-mixed-rice.svg' },
-      { id: 3, req: 18000, name: '焼き秋刀魚', file: 'grilled-pacific-saury.svg' },
-      { id: 4, req: 24000, name: 'りんごと梨のパイ', file: 'apple-and-pear-pie.svg' },
-      { id: 5, req: 30000, name: '海鮮丼', file: 'seafood-rice-bowl.svg' },
-      { id: 6, req: 36000, name: 'パフェ', file: 'parfait.svg' },
-      { id: 7, req: 42000, name: '弁当', file: 'lunch-box.svg' }
+      { id: 1, req: 6000, name: 'かぼちゃとレンコンの煮物', file: getFileName('pumpkin-and-lotus-stew') },
+      { id: 2, req: 12000, name: '炊き込みご飯', file: getFileName('japanese-mixed-rice') },
+      { id: 3, req: 18000, name: '焼き秋刀魚', file: getFileName('grilled-pacific-saury') },
+      { id: 4, req: 24000, name: 'りんごと梨のパイ', file: getFileName('apple-and-pear-pie') },
+      { id: 5, req: 30000, name: '海鮮丼', file: getFileName('seafood-rice-bowl') },
+      { id: 6, req: 36000, name: 'パフェ', file: getFileName('parfait') },
+      { id: 7, req: 42000, name: '弁当', file: getFileName('lunch-box') }
     ];
 
     const imageSources = {
-      kaki: BASE_URL + 'persimmon.svg',
-      satsumaimo: BASE_URL + 'sweetpotato.svg',
-      sanma: BASE_URL + 'pacific-saury.svg',
-      budou: BASE_URL + 'grapes.svg',
-      nashi: BASE_URL + 'pears.svg',
-      kabocha: BASE_URL + 'pumpkin.svg',
-      kinoko: BASE_URL + 'mushrooms.svg',
-      apple: BASE_URL + 'apple.svg',
-      marron: BASE_URL + 'marron.svg',
-      rice: BASE_URL + 'rice.svg',
-      salmon: BASE_URL + 'salmon.svg',
-      lotus: BASE_URL + 'lotus-roots.svg',
-      arm: BASE_URL + 'arm.svg',
-      leaf: BASE_URL + 'leaf.svg'
+      kaki: BASE_URL + getFileName('persimmon'),
+      satsumaimo: BASE_URL + getFileName('sweetpotato'),
+      sanma: BASE_URL + getFileName('pacific-saury'),
+      budou: BASE_URL + getFileName('grapes'),
+      nashi: BASE_URL + getFileName('pears'),
+      kabocha: BASE_URL + getFileName('pumpkin'),
+      kinoko: BASE_URL + getFileName('mushrooms'),
+      apple: BASE_URL + getFileName('apple'),
+      marron: BASE_URL + getFileName('marron'),
+      rice: BASE_URL + getFileName('rice'),
+      salmon: BASE_URL + getFileName('salmon'),
+      lotus: BASE_URL + getFileName('lotus-roots'),
+      arm: BASE_URL + getFileName('arm'),
+      leaf: BASE_URL + getFileName('leaf')
     };
 
     rewardData.forEach(r => {
@@ -402,6 +444,7 @@
       };
     }
 
+    // --- 落ち葉キャッシュの最適化 (1回のみ生成) ---
     function createColoredLeaves(leafImg) {
       const colors = { red: '#e74c3c', yellow: '#f1c40f', orange: '#e67e22' };
       const w = leafImg.naturalWidth || 100;
@@ -449,11 +492,7 @@
         dot.classList.toggle('active', i === index);
       });
 
-      if (index === slides.length - 1) {
-        slideNextBtn.textContent = 'ゲームをはじめる';
-      } else {
-        slideNextBtn.textContent = '次へ';
-      }
+      slideNextBtn.textContent = (index === slides.length - 1) ? 'ゲームをはじめる' : '次へ';
     }
 
     slideNextBtn.addEventListener('click', () => {
@@ -486,7 +525,7 @@
     let timerInterval = null;
     let isPlaying = false;
 
-    const FPS = 45;
+    const FPS = 60; // 60FPSへ固定しスムーズ化
     const frameInterval = 1000 / FPS;
     let lastFrameTime = 0;
 
@@ -540,14 +579,8 @@
       prevMousePos.y = currentY;
     }
 
-    canvas.addEventListener('mousemove', (e) => {
-      updateTargetPos(e.clientX, e.clientY);
-    });
-
-    canvas.addEventListener('touchstart', (e) => {
-      updateTargetPos(e.touches[0].clientX, e.touches[0].clientY, true);
-    }, { passive: false });
-
+    canvas.addEventListener('mousemove', (e) => updateTargetPos(e.clientX, e.clientY));
+    canvas.addEventListener('touchstart', (e) => updateTargetPos(e.touches[0].clientX, e.touches[0].clientY, true), { passive: false });
     canvas.addEventListener('touchmove', (e) => {
       updateTargetPos(e.touches[0].clientX, e.touches[0].clientY);
       e.preventDefault();
@@ -597,7 +630,7 @@
       let colorType = 'red';
       if (rand < 4 / 12) {
         colorType = 'yellow';
-      } else if (rand < (4 + 3) / 12) {
+      } else if (rand < 7 / 12) {
         colorType = 'orange';
       }
 
@@ -653,9 +686,7 @@
       timerInterval = setInterval(() => {
         timeLeft--;
         timeEl.textContent = timeLeft;
-        if (timeLeft <= 0) {
-          endGame();
-        }
+        if (timeLeft <= 0) endGame();
       }, 1000);
 
       requestAnimationFrame(gameLoop);
@@ -686,9 +717,7 @@
 
       alert(`タイムアップ！ あなたのスコアは ${score} pt でした！\n通算スコア: ${totalScore} pt`);
 
-      if (pendingRewards.length > 0) {
-        showNextRewardModal();
-      }
+      if (pendingRewards.length > 0) showNextRewardModal();
     }
 
     function showNextRewardModal() {
@@ -704,9 +733,7 @@
       stopParticleAnimation();
       rewardModal.classList.remove('active');
       pendingRewards.shift();
-      if (pendingRewards.length > 0) {
-        setTimeout(showNextRewardModal, 300);
-      }
+      if (pendingRewards.length > 0) setTimeout(showNextRewardModal, 300);
     });
 
     let particleAnimId = null;
@@ -719,7 +746,7 @@
       pCanvas.height = pCanvas.offsetHeight;
       particles = [];
 
-      for (let i = 0; i < 25; i++) {
+      for (let i = 0; i < 20; i++) {
         const rand = Math.random();
         let color = '#e74c3c';
         if (rand < 0.33) color = '#f1c40f';
@@ -801,15 +828,12 @@
       collectionModal.classList.add('active');
     });
 
-    collectionCloseBtn.addEventListener('click', () => {
-      collectionModal.classList.remove('active');
-    });
+    collectionCloseBtn.addEventListener('click', () => collectionModal.classList.remove('active'));
 
     function gameLoop(timestamp) {
       if (!isPlaying) return;
 
       const elapsed = timestamp - lastFrameTime;
-
       if (elapsed >= frameInterval) {
         lastFrameTime = timestamp - (elapsed % frameInterval);
         update();
@@ -819,16 +843,15 @@
     }
 
     function update() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // 背景固定クリア
+      ctx.fillStyle = '#fff8dc';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const dxMouse = targetMousePos.x - hook.x;
       const dyMouse = targetMousePos.y - hook.y;
       const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
-      let followSpeed = 0.4;
-      if (hook.caughtItem) {
-        followSpeed = 0.28 / hook.caughtItem.weight;
-      }
+      let followSpeed = hook.caughtItem ? (0.28 / hook.caughtItem.weight) : 0.4;
 
       hook.x += dxMouse * followSpeed;
       hook.y += dyMouse * followSpeed;
@@ -843,10 +866,9 @@
         mouseSpeed = 0;
       }
 
-      if (hook.caughtItem && distMouse > 250) {
-        dropCaughtItem();
-      }
+      if (hook.caughtItem && distMouse > 250) dropCaughtItem();
 
+      // 釣り糸の描画
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(hook.x, hook.y);
@@ -861,11 +883,8 @@
 
         if (armImg.naturalWidth && armImg.naturalHeight) {
           const ratio = armImg.naturalWidth / armImg.naturalHeight;
-          if (ratio >= 1) {
-            drawH = hook.targetSize / ratio;
-          } else {
-            drawW = hook.targetSize * ratio;
-          }
+          if (ratio >= 1) drawH = hook.targetSize / ratio;
+          else drawW = hook.targetSize * ratio;
         }
 
         ctx.save();
@@ -874,6 +893,7 @@
         ctx.restore();
       }
 
+      // 落ち葉処理
       for (let i = fallingLeaves.length - 1; i >= 0; i--) {
         let leaf = fallingLeaves[i];
 
@@ -900,28 +920,21 @@
         }
 
         if (isPlaying) {
-          let checkX = hook.x;
-          let checkY = hook.y;
-          let checkRadius = hook.size;
-
-          if (hook.caughtItem) {
-            checkX = hook.caughtItem.x;
-            checkY = hook.caughtItem.y;
-            checkRadius = hook.caughtItem.radius;
-          }
+          let checkX = hook.caughtItem ? hook.caughtItem.x : hook.x;
+          let checkY = hook.caughtItem ? hook.caughtItem.y : hook.y;
+          let checkRadius = hook.caughtItem ? hook.caughtItem.radius : hook.size;
 
           const distDX = currentX - checkX;
           const distDY = leaf.y - checkY;
           const distance = Math.sqrt(distDX * distDX + distDY * distDY);
 
           if (distance < leaf.radius + checkRadius) {
-            if (hook.caughtItem) {
-              dropCaughtItem();
-            }
+            if (hook.caughtItem) dropCaughtItem();
           }
         }
       }
 
+      // ターゲット（味覚）処理
       for (let i = items.length - 1; i >= 0; i--) {
         let item = items[i];
         const img = images[item.imgKey];
@@ -931,13 +944,8 @@
 
         if (img && img.naturalWidth && img.naturalHeight) {
           const aspectRatio = img.naturalWidth / img.naturalHeight;
-          if (aspectRatio >= 1) {
-            drawWidth = item.targetSize;
-            drawHeight = item.targetSize / aspectRatio;
-          } else {
-            drawHeight = item.targetSize;
-            drawWidth = item.targetSize * aspectRatio;
-          }
+          if (aspectRatio >= 1) drawHeight = item.targetSize / aspectRatio;
+          else drawWidth = item.targetSize * aspectRatio;
         }
 
         if (item === hook.caughtItem) {
@@ -972,18 +980,14 @@
             const dy = hook.y - item.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
-            if (distance < hook.size + item.radius) {
-              hook.caughtItem = item;
-            }
+            if (distance < hook.size + item.radius) hook.caughtItem = item;
           }
         }
 
         if (img && img.complete) {
           ctx.save();
           ctx.translate(item.x, item.y);
-          if (item.direction === 1) {
-            ctx.scale(-1, 1);
-          }
+          if (item.direction === 1) ctx.scale(-1, 1);
           ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
           ctx.restore();
         }
