@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>秋の味覚 一本釣りゲーム</title>
   
-  <!-- PWA Manifest (Data URI形式で追加) -->
+  <!-- PWA Manifest -->
   <link rel="manifest" href='data:application/manifest+json,{"name":"秋の味覚 一本釣りゲーム","short_name":"一本釣り","start_url":".","display":"standalone","background_color":"#ffe1b3","theme_color":"#e68a00"}'>
 
   <style>
@@ -329,22 +329,21 @@
   </div>
 
   <script>
-    // --- 1. OS / PC 判定処理 ---
-    function isPC() {
+    // --- 1. Windows OS のみの判定 ---
+    function isWindowsOS() {
       const userAgent = navigator.userAgent.toLowerCase();
-      const isMobileDevice = /iphone|ipad|ipod|android|blackberry|mini|windows ce|palm/i.test(userAgent);
-      const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-      return !isMobileDevice && !hasTouch;
+      // Windows 判定 (Win16 / Win32 / Win64 / Windows Phone 等を含む)
+      return /win/i.test(userAgent) || /windows/i.test(userAgent);
     }
 
-    const isDesktopPC = isPC();
-    const fileExt = isDesktopPC ? '.png' : '.svg'; // PCの場合はPNGを読み込んでラスタライズ描画コストを削減
+    const isWindows = isWindowsOS();
+    const fileExt = isWindows ? '.png' : '.svg'; // WindowsのみPNG、Mac/iPad/iPhone/Android等はSVGを使用
 
-    // --- 2. PWA & Service Worker 登録 (軽量・全自動キャッシュ) ---
+    // --- 2. Service Worker 登録 (軽量オフライン対応) ---
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         const swCode = `
-          const CACHE_NAME = 'oneshot-v1';
+          const CACHE_NAME = 'oneshot-v2';
           self.addEventListener('install', (e) => {
             e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
           });
@@ -365,9 +364,9 @@
       });
     }
 
-    // --- 3. DOM & 基本変数 ---
+    // --- 3. DOM & 基本設定 ---
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d', { alpha: false }); // alpha指定でグラフィックパフォーマンス向上
+    const ctx = canvas.getContext('2d', { alpha: false });
     const scoreEl = document.getElementById('score');
     const totalScoreEl = document.getElementById('total-score');
     const timeEl = document.getElementById('time');
@@ -444,7 +443,6 @@
       };
     }
 
-    // --- 落ち葉キャッシュの最適化 (1回のみ生成) ---
     function createColoredLeaves(leafImg) {
       const colors = { red: '#e74c3c', yellow: '#f1c40f', orange: '#e67e22' };
       const w = leafImg.naturalWidth || 100;
@@ -525,7 +523,7 @@
     let timerInterval = null;
     let isPlaying = false;
 
-    const FPS = 60; // 60FPSへ固定しスムーズ化
+    const FPS = 60;
     const frameInterval = 1000 / FPS;
     let lastFrameTime = 0;
 
@@ -843,7 +841,6 @@
     }
 
     function update() {
-      // 背景固定クリア
       ctx.fillStyle = '#fff8dc';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -868,7 +865,6 @@
 
       if (hook.caughtItem && distMouse > 250) dropCaughtItem();
 
-      // 釣り糸の描画
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(hook.x, hook.y);
@@ -893,7 +889,6 @@
         ctx.restore();
       }
 
-      // 落ち葉処理
       for (let i = fallingLeaves.length - 1; i >= 0; i--) {
         let leaf = fallingLeaves[i];
 
@@ -934,7 +929,6 @@
         }
       }
 
-      // ターゲット（味覚）処理
       for (let i = items.length - 1; i >= 0; i--) {
         let item = items[i];
         const img = images[item.imgKey];
