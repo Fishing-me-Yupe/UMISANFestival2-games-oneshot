@@ -1,0 +1,16 @@
+{
+  "name": "秋の味覚 一本釣りゲーム",
+  "short_name": "一本釣り",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffe1b3",
+  "theme_color": "#e68a00",
+  "icons": [
+    {
+      "src": "https://fishing-me-yupe.github.io/oneshot-assets/persimmon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
